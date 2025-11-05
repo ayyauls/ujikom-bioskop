@@ -1,0 +1,302 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Film;
+use App\Models\Booking;
+use App\Models\Transaction;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use App\Models\User;
+use Midtrans\Config;
+use Midtrans\Snap;
+
+class UserController extends Controller
+{
+    // ============================
+    // 🏠 HALAMAN UTAMA
+    // ============================
+    public function index()
+    {
+        $nowPlaying = Film::where('status', 'now_playing')->get();
+        $upComing = Film::where('status', 'coming_soon')->get();
+
+        return view('landing.index', compact('nowPlaying', 'upComing'));
+    }
+
+    // ============================
+    // 🎬 DETAIL FILM
+    // ============================
+    public function detail($id)
+    {
+        $film = Film::findOrFail($id);
+        return view('film_detail', compact('film'));
+    }
+
+    // ============================
+    // 🔐 REGISTER & LOGIN
+    // ============================
+    public function showRegister()
+    {
+        return view('auth.register');
+    }
+
+    public function register(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'phone' => 'required|string|max:20|unique:users,phone',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|min:6|confirmed',
+        ]);
+
+        User::create([
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
+
+        return redirect()->route('login')->with('success', '✅ Akun berhasil dibuat! Silakan login.');
+    }
+
+    public function showLogin()
+    {
+        return view('auth.login');
+    }
+
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
+
+        $credentials = $request->only('email', 'password');
+
+        if (Auth::attempt($credentials)) {
+            $request->session()->regenerate();
+            return redirect()->route('home')->with('success', '🎉 Selamat datang kembali di BioskopKu!');
+        }
+
+        return back()->withErrors([
+            'email' => 'Email atau kata sandi salah.',
+        ])->onlyInput('email');
+    }
+
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect()->route('login')->with('success', '👋 Anda telah logout.');
+    }
+
+    // ============================
+    // 🪑 PILIH KURSI
+    // ============================
+    public function selectSeat(Request $request, $id)
+    {
+        $film = Film::findOrFail($id);
+        $showtime = $request->query('time');
+        $bookingDate = $request->query('date') ?? now()->format('Y-m-d');
+
+        if (!$showtime) {
+            return redirect()->route('film.detail', $id)->withErrors('Jam tayang belum dipilih.');
+        }
+
+        $bookedSeats = Booking::where('film_id', $id)
+            ->where('booking_date', $bookingDate)
+            ->where('showtime', $showtime)
+            ->whereIn('status', ['pending', 'paid'])
+            ->pluck('seat_number')
+            ->toArray();
+
+        return view('booking.select_seat', compact('film', 'bookedSeats', 'showtime', 'bookingDate'));
+    }
+
+    // ============================
+    // 🎟️ BOOKING KURSI
+    // ============================
+    public function bookSeat(Request $request, $id)
+    {
+        $request->validate([
+            'seats' => 'required|array|min:1',
+            'showtime' => 'required',
+        ]);
+
+        $film = Film::findOrFail($id);
+        $user = Auth::user();
+        $bookingDate = now()->format('Y-m-d');
+
+        $existing = Booking::where('film_id', $id)
+            ->where('booking_date', $bookingDate)
+            ->where('showtime', $request->showtime)
+            ->whereIn('seat_number', $request->seats)
+            ->whereIn('status', ['pending', 'paid'])
+            ->pluck('seat_number')->toArray();
+
+        if ($existing) {
+            return back()->withErrors(['seats' => 'Kursi ' . implode(', ', $existing) . ' sudah dibooking!']);
+        }
+
+        DB::beginTransaction();
+        try {
+            $bookingCode = 'BK' . date('Ymd') . rand(10000, 99999);
+            $total = count($request->seats) * 50000;
+
+            foreach ($request->seats as $seat) {
+                Booking::create([
+                    'booking_code' => $bookingCode,
+                    'user_id' => $user->id,
+                    'film_id' => $id,
+                    'seat_number' => $seat,
+                    'showtime' => $request->showtime,
+                    'booking_date' => $bookingDate,
+                    'customer_name' => $user->name,
+                    'customer_email' => $user->email,
+                    'customer_phone' => $user->phone,
+                    'price' => 50000,
+                    'status' => 'pending',
+                ]);
+            }
+
+            $transaction = Transaction::create([
+                'transaction_code' => Transaction::generateTransactionCode(),
+                'booking_code' => $bookingCode,
+                'user_id' => $user->id,
+                'total_amount' => $total,
+                'status' => 'pending',
+                'expired_at' => now()->addHours(24),
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('transaction.payment', $transaction->booking_code)
+                ->with('success', 'Booking berhasil! Silakan lanjutkan pembayaran.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Gagal booking: ' . $e->getMessage()]);
+        }
+    }
+
+    // ============================
+    // 💳 PEMBAYARAN (MIDTRANS)
+    // ============================
+    public function transactionPayment($bookingCode)
+    {
+        $transaction = Transaction::where('booking_code', $bookingCode)->firstOrFail();
+        $user = Auth::user();
+
+        if ($transaction->status === 'paid') {
+            return redirect()->route('transaction.index')->with('info', 'Transaksi sudah dibayar.');
+        }
+
+        Config::$serverKey = config('midtrans.server_key');
+        Config::$isProduction = config('midtrans.is_production', false);
+        Config::$isSanitized = true;
+        Config::$is3ds = true;
+
+        $params = [
+            'transaction_details' => [
+                'order_id' => $transaction->transaction_code,
+                'gross_amount' => $transaction->total_amount,
+            ],
+            'customer_details' => [
+                'first_name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ],
+        ];
+
+        $snapToken = Snap::getSnapToken($params);
+        $transaction->update(['snap_token' => $snapToken]);
+
+        return view('payment.process', compact('transaction', 'snapToken'));
+    }
+
+    // ============================
+    // 🔄 CALLBACK MIDTRANS
+    // ============================
+    public function updateTransactionStatus(Request $request)
+    {
+        $transactionCode = $request->input('order_id');
+        $status = $request->input('transaction_status');
+
+        $transaction = Transaction::where('transaction_code', $transactionCode)->first();
+
+        if (!$transaction) {
+            return response()->json(['message' => 'Transaction not found'], 404);
+        }
+
+        switch ($status) {
+            case 'settlement':
+            case 'capture':
+                $transaction->update([
+                    'status' => 'paid',
+                    'paid_at' => now(),
+                ]);
+                break;
+            case 'expire':
+                $transaction->update(['status' => 'expired']);
+                break;
+            case 'cancel':
+                $transaction->update(['status' => 'cancelled']);
+                break;
+            case 'deny':
+            case 'failure':
+                $transaction->update(['status' => 'failed']);
+                break;
+        }
+
+        return response()->json(['message' => 'OK']);
+    }
+
+    // ============================
+    // 📜 RIWAYAT TRANSAKSI
+    // ============================
+    public function transactionIndex()
+    {
+        $transactions = Transaction::where('user_id', Auth::id())
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('user.transaction_show', compact('transactions'));
+    }
+
+    // ============================
+    // 📄 DETAIL TRANSAKSI
+    // ============================
+    public function transactionShow($transactionCode)
+    {
+        $transaction = Transaction::where('transaction_code', $transactionCode)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        $bookings = Booking::where('booking_code', $transaction->booking_code)->get();
+        $film = Film::find($bookings->first()->film_id ?? null);
+
+        return view('user.detailtransaksi', compact('transaction', 'bookings', 'film'));
+    }
+
+    // ============================
+    // 🎫 DETAIL TIKET USER (BARU)
+    // ============================
+    public function ticketDetail($bookingCode)
+    {
+        $bookings = Booking::where('booking_code', $bookingCode)
+            ->where('user_id', Auth::id())
+            ->get();
+
+        if ($bookings->isEmpty()) {
+            abort(404, 'Tiket tidak ditemukan.');
+        }
+
+        $film = Film::find($bookings->first()->film_id);
+        $transaction = Transaction::where('booking_code', $bookingCode)->first();
+
+        return view('user.ticket_detail', compact('bookings', 'film', 'transaction'));
+    }
+}
