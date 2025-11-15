@@ -78,6 +78,14 @@ class UserController extends Controller
 
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
+
+            $user = Auth::user();
+            if ($user->role === 'owner') {
+                return redirect()->route('owner.dashboard')->with('success', '🎉 Selamat datang kembali di BioskopKu!');
+            } elseif ($user->role === 'kasir') {
+                return redirect()->route('kasir.dashboard')->with('success', '🎉 Selamat datang kembali di BioskopKu!');
+            }
+
             return redirect()->route('home')->with('success', '🎉 Selamat datang kembali di BioskopKu!');
         }
 
@@ -167,6 +175,7 @@ class UserController extends Controller
                 'transaction_code' => Transaction::generateTransactionCode(),
                 'booking_code' => $bookingCode,
                 'user_id' => $user->id,
+                'film_id' => $id,
                 'total_amount' => $total,
                 'status' => 'pending',
                 'expired_at' => now()->addHours(24),
@@ -238,16 +247,24 @@ class UserController extends Controller
                     'status' => 'paid',
                     'paid_at' => now(),
                 ]);
+                Booking::where('booking_code', $transaction->booking_code)
+                    ->update(['status' => 'paid']);
                 break;
             case 'expire':
                 $transaction->update(['status' => 'expired']);
+                Booking::where('booking_code', $transaction->booking_code)
+                    ->update(['status' => 'expired']);
                 break;
             case 'cancel':
                 $transaction->update(['status' => 'cancelled']);
+                Booking::where('booking_code', $transaction->booking_code)
+                    ->update(['status' => 'cancelled']);
                 break;
             case 'deny':
             case 'failure':
                 $transaction->update(['status' => 'failed']);
+                Booking::where('booking_code', $transaction->booking_code)
+                    ->update(['status' => 'failed']);
                 break;
         }
 
@@ -282,7 +299,7 @@ class UserController extends Controller
     }
 
     // ============================
-    // 🎫 DETAIL TIKET USER (BARU)
+    // 🎫 DETAIL TIKET USER
     // ============================
     public function ticketDetail($bookingCode)
     {
@@ -298,5 +315,96 @@ class UserController extends Controller
         $transaction = Transaction::where('booking_code', $bookingCode)->first();
 
         return view('user.ticket_detail', compact('bookings', 'film', 'transaction'));
+    }
+
+    // ============================
+    // 🎫 HALAMAN TIKET SAYA (MY TICKETS)
+    // ============================
+    public function myTickets()
+    {
+        $user = Auth::user();
+        
+        // Ambil semua booking user dengan relasi film
+        $bookingsRaw = Booking::where('user_id', $user->id)
+            ->with('film')
+            ->orderBy('booking_date', 'desc')
+            ->orderBy('showtime', 'desc')
+            ->get();
+
+        // Group booking berdasarkan booking_code
+        $groupedBookings = $bookingsRaw->groupBy('booking_code');
+
+        // Format data untuk view
+        $bookings = [];
+        foreach ($groupedBookings as $bookingCode => $bookingGroup) {
+            $first = $bookingGroup->first();
+            $bookings[] = [
+                'booking_code' => $bookingCode,
+                'film_title' => $first->film->title ?? 'Unknown',
+                'poster' => $first->film->poster ?? null,
+                'booking_date' => $first->booking_date,
+                'showtime' => $first->showtime,
+                'seats' => $bookingGroup->pluck('seat_number')->toArray(),
+                'total_price' => $bookingGroup->sum('price'),
+                'status' => $first->status,
+            ];
+        }
+
+        return view('user.my_tickets', compact('bookings'));
+    }
+
+    // ============================
+    // ⚙️ HALAMAN EDIT PROFILE
+    // ============================
+    public function editProfile()
+    {
+        return view('user.edit_profile');
+    }
+
+    // ============================
+    // 💾 UPDATE PROFILE
+    // ============================
+    public function updateProfile(Request $request)
+    {
+        $user = Auth::user();
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'phone' => 'required|string|max:20|unique:users,phone,' . $user->id,
+        ]);
+
+        $user->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+        ]);
+
+        return back()->with('success', '✅ Profile berhasil diperbarui!');
+    }
+
+    // ============================
+    // 🔒 UPDATE PASSWORD
+    // ============================
+    public function updatePassword(Request $request)
+    {
+        $user = Auth::user();
+
+        $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|min:6|confirmed',
+        ]);
+
+        // Cek password lama
+        if (!Hash::check($request->current_password, $user->password)) {
+            return back()->withErrors(['current_password' => 'Password lama tidak sesuai.']);
+        }
+
+        // Update password
+        $user->update([
+            'password' => Hash::make($request->password),
+        ]);
+
+        return back()->with('success', '✅ Password berhasil diubah!');
     }
 }

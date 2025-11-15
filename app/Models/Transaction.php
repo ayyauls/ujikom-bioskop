@@ -10,16 +10,22 @@ class Transaction extends Model
     use HasFactory;
 
     protected $fillable = [
-        'transaction_code',
         'booking_code',
         'user_id',
+        'film_id',
+        'transaction_code',
+        'customer_name',
+        'customer_email',
+        'seats',
+        'showtime',
+        'ticket_count',
         'total_amount',
-        'status',
         'payment_method',
+        'status',
         'snap_token',
         'paid_at',
         'expired_at',
-        'notes',
+        'notes'
     ];
 
     protected $casts = [
@@ -31,9 +37,21 @@ class Transaction extends Model
     /**
      * Relasi ke User
      */
-    public function user()
+    // Di Model Transaction
+public function user()
+{
+    return $this->belongsTo(User::class)->withDefault([
+        'name' => 'Guest User',
+        'email' => 'guest@example.com'
+    ]);
+}
+
+    /**
+     * Relasi ke Film
+     */
+    public function film()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Film::class);
     }
 
     /**
