@@ -118,6 +118,30 @@
         window.onload = function() {
             setTimeout(() => payButton.click(), 1000);
         };
+
+        // Handle callback dari Midtrans
+        window.addEventListener('message', function(event) {
+            if (event.origin !== 'https://app.sandbox.midtrans.com' && event.origin !== 'https://app.midtrans.com') {
+                return;
+            }
+
+            if (event.data && event.data.type === 'payment_success') {
+                fetch('{{ route("transaction.update-status") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        order_id: '{{ $transaction->transaction_code }}',
+                        transaction_status: 'settlement',
+                    })
+                }).then(() => {
+                    alert('✅ Pembayaran berhasil!');
+                    window.location.href = "{{ route('transaction.index') }}";
+                });
+            }
+        });
     </script>
 
 </body>

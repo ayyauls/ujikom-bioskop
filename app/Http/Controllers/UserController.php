@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Film;
 use App\Models\Booking;
 use App\Models\Transaction;
+use App\Models\Schedule;
+use App\Models\Seat;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -32,7 +34,13 @@ class UserController extends Controller
     public function detail($id)
     {
         $film = Film::findOrFail($id);
-        return view('film_detail', compact('film'));
+        $todaySchedules = Schedule::where('film_id', $id)
+            ->whereDate('show_date', today())
+            ->where('is_active', true)
+            ->with('studio')
+            ->orderBy('show_time')
+            ->get();
+        return view('film_detail', compact('film', 'todaySchedules'));
     }
 
     // ============================
@@ -108,21 +116,49 @@ class UserController extends Controller
     public function selectSeat(Request $request, $id)
     {
         $film = Film::findOrFail($id);
-        $showtime = $request->query('time');
-        $bookingDate = $request->query('date') ?? now()->format('Y-m-d');
-
-        if (!$showtime) {
-            return redirect()->route('film.detail', $id)->withErrors('Jam tayang belum dipilih.');
+        $scheduleId = $request->query('schedule_id');
+        
+        if (!$scheduleId) {
+            return redirect()->route('film.detail', $id)->withErrors('Jadwal belum dipilih.');
         }
+        
+        $schedule = Schedule::findOrFail($scheduleId);
 
+        // Auto-expire pending transactions yang sudah melewati expired_at
+        $this->autoExpireTransactions();
+
+        // Ambil kursi yang sudah dipesan (paid atau pending yang belum expired)
         $bookedSeats = Booking::where('film_id', $id)
-            ->where('booking_date', $bookingDate)
-            ->where('showtime', $showtime)
-            ->whereIn('status', ['pending', 'paid'])
+            ->where(function($query) use ($scheduleId, $schedule) {
+                $query->where('schedule_id', $scheduleId)
+                      ->orWhere(function($q) use ($schedule) {
+                          $q->where('showtime', $schedule->show_time)
+                            ->whereDate('booking_date', $schedule->show_date);
+                      });
+            })
+            ->where(function($query) {
+                $query->where('status', 'paid')
+                      ->orWhere(function($q) {
+                          $q->where('status', 'pending')
+                            ->whereHas('transaction', function($qt) {
+                                $qt->where('status', 'pending')
+                                   ->where(function($subq) {
+                                       $subq->whereNull('expired_at')
+                                            ->orWhere('expired_at', '>', now());
+                                   });
+                            });
+                      });
+            })
             ->pluck('seat_number')
             ->toArray();
 
-        return view('booking.select_seat', compact('film', 'bookedSeats', 'showtime', 'bookingDate'));
+        // Ambil kursi yang disabled oleh admin
+        $disabledSeats = Seat::where('studio_id', $schedule->studio_id)
+            ->where('is_available', false)
+            ->pluck('seat_number')
+            ->toArray();
+
+        return view('booking.select_seat', compact('film', 'bookedSeats', 'schedule', 'disabledSeats'));
     }
 
     // ============================
@@ -132,37 +168,77 @@ class UserController extends Controller
     {
         $request->validate([
             'seats' => 'required|array|min:1',
-            'showtime' => 'required',
+            'schedule_id' => 'required',
         ]);
 
         $film = Film::findOrFail($id);
         $user = Auth::user();
-        $bookingDate = now()->format('Y-m-d');
+        
+        if ($user->role !== 'user') {
+            return back()->withErrors(['error' => 'Hanya user biasa yang bisa melakukan booking. Silakan login dengan akun user.']);
+        }
 
+        $schedule = Schedule::findOrFail($request->schedule_id);
+        
+        // Auto-expire sebelum cek ketersediaan kursi
+        $this->autoExpireTransactions();
+        
+        // Cek kursi yang sudah dibooking (paid atau pending yang belum expired)
         $existing = Booking::where('film_id', $id)
-            ->where('booking_date', $bookingDate)
-            ->where('showtime', $request->showtime)
+            ->where(function($query) use ($request, $schedule) {
+                $query->where('schedule_id', $request->schedule_id)
+                      ->orWhere(function($q) use ($schedule) {
+                          $q->where('showtime', $schedule->show_time)
+                            ->whereDate('booking_date', $schedule->show_date);
+                      });
+            })
             ->whereIn('seat_number', $request->seats)
-            ->whereIn('status', ['pending', 'paid'])
+            ->where(function($query) {
+                $query->where('status', 'paid')
+                      ->orWhere(function($q) {
+                          $q->where('status', 'pending')
+                            ->whereHas('transaction', function($qt) {
+                                $qt->where('status', 'pending')
+                                   ->where(function($subq) {
+                                       $subq->whereNull('expired_at')
+                                            ->orWhere('expired_at', '>', now());
+                                   });
+                            });
+                      });
+            })
             ->pluck('seat_number')->toArray();
 
         if ($existing) {
             return back()->withErrors(['seats' => 'Kursi ' . implode(', ', $existing) . ' sudah dibooking!']);
         }
 
+        // Cek kursi yang disabled oleh admin
+        $disabledSeats = Seat::where('studio_id', $schedule->studio_id)
+            ->where('is_available', false)
+            ->whereIn('seat_number', $request->seats)
+            ->pluck('seat_number')->toArray();
+
+        if ($disabledSeats) {
+            return back()->withErrors(['seats' => 'Kursi ' . implode(', ', $disabledSeats) . ' tidak tersedia!']);
+        }
+
         DB::beginTransaction();
         try {
             $bookingCode = 'BK' . date('Ymd') . rand(10000, 99999);
             $total = count($request->seats) * 50000;
+            
+            // Set waktu expired (15 menit dari sekarang)
+            $expiryTime = now()->addMinutes(15);
 
             foreach ($request->seats as $seat) {
                 Booking::create([
                     'booking_code' => $bookingCode,
                     'user_id' => $user->id,
                     'film_id' => $id,
+                    'schedule_id' => $request->schedule_id,
                     'seat_number' => $seat,
-                    'showtime' => $request->showtime,
-                    'booking_date' => $bookingDate,
+                    'showtime' => $schedule->show_time,
+                    'booking_date' => $schedule->show_date,
                     'customer_name' => $user->name,
                     'customer_email' => $user->email,
                     'customer_phone' => $user->phone,
@@ -176,15 +252,22 @@ class UserController extends Controller
                 'booking_code' => $bookingCode,
                 'user_id' => $user->id,
                 'film_id' => $id,
+                'customer_name' => $user->name,
+                'customer_email' => $user->email,
+                'seats' => $request->seats,
+                'showtime' => $schedule->show_time,
+                'ticket_count' => count($request->seats),
+                'total_price' => $total,
                 'total_amount' => $total,
+                'payment_method' => 'qris',
                 'status' => 'pending',
-                'expired_at' => now()->addHours(24),
+                'expired_at' => $expiryTime,
             ]);
 
             DB::commit();
 
             return redirect()->route('transaction.payment', $transaction->booking_code)
-                ->with('success', 'Booking berhasil! Silakan lanjutkan pembayaran.');
+                ->with('success', 'Booking berhasil! Silakan selesaikan pembayaran dalam 15 menit.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['error' => 'Gagal booking: ' . $e->getMessage()]);
@@ -201,6 +284,15 @@ class UserController extends Controller
 
         if ($transaction->status === 'paid') {
             return redirect()->route('transaction.index')->with('info', 'Transaksi sudah dibayar.');
+        }
+
+        // Cek apakah sudah expired dari Transaction
+        if ($transaction->status === 'pending' && $transaction->expired_at && $transaction->expired_at <= now()) {
+            Booking::where('booking_code', $bookingCode)->update(['status' => 'expired']);
+            $transaction->update(['status' => 'expired']);
+            
+            return redirect()->route('transaction.index')
+                ->withErrors('Waktu pembayaran telah habis. Booking sudah kadaluarsa. Silakan booking ulang.');
         }
 
         Config::$serverKey = config('midtrans.server_key');
@@ -272,10 +364,29 @@ class UserController extends Controller
     }
 
     // ============================
+    // 🕒 AUTO EXPIRE TRANSACTIONS (Helper Method)
+    // ============================
+    private function autoExpireTransactions()
+    {
+        $expiredTransactions = Transaction::where('status', 'pending')
+            ->where('expired_at', '<=', now())
+            ->get();
+        
+        foreach ($expiredTransactions as $transaction) {
+            $transaction->update(['status' => 'expired']);
+            Booking::where('booking_code', $transaction->booking_code)
+                ->update(['status' => 'expired']);
+        }
+    }
+
+    // ============================
     // 📜 RIWAYAT TRANSAKSI
     // ============================
     public function transactionIndex()
     {
+        // Auto-expire sebelum tampilkan list
+        $this->autoExpireTransactions();
+        
         $transactions = Transaction::where('user_id', Auth::id())
             ->orderBy('created_at', 'desc')
             ->get();
@@ -324,17 +435,15 @@ class UserController extends Controller
     {
         $user = Auth::user();
         
-        // Ambil semua booking user dengan relasi film
         $bookingsRaw = Booking::where('user_id', $user->id)
+            ->whereIn('status', ['paid', 'pending'])
             ->with('film')
             ->orderBy('booking_date', 'desc')
             ->orderBy('showtime', 'desc')
             ->get();
 
-        // Group booking berdasarkan booking_code
         $groupedBookings = $bookingsRaw->groupBy('booking_code');
 
-        // Format data untuk view
         $bookings = [];
         foreach ($groupedBookings as $bookingCode => $bookingGroup) {
             $first = $bookingGroup->first();
@@ -395,12 +504,10 @@ class UserController extends Controller
             'password' => 'required|min:6|confirmed',
         ]);
 
-        // Cek password lama
         if (!Hash::check($request->current_password, $user->password)) {
             return back()->withErrors(['current_password' => 'Password lama tidak sesuai.']);
         }
 
-        // Update password
         $user->update([
             'password' => Hash::make($request->password),
         ]);
@@ -408,3 +515,4 @@ class UserController extends Controller
         return back()->with('success', '✅ Password berhasil diubah!');
     }
 }
+

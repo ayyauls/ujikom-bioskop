@@ -1,63 +1,136 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riwayat Transaksi - BioskopKu</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 font-sans text-gray-800">
+<body class="bg-[#1E1E1E] text-white font-sans min-h-screen">
 
-    <div class="max-w-5xl mx-auto mt-10 bg-white rounded-2xl shadow-xl p-8">
-        <h1 class="text-3xl font-bold text-center mb-8">💳 Riwayat Transaksi Anda</h1>
+    @include('layouts.navbar')
 
-        @if($transactions->isEmpty())
-            <div class="text-center py-12">
-                <p class="text-gray-500 text-lg">Belum ada transaksi yang dilakukan.</p>
-                <a href="/" class="text-blue-600 hover:underline mt-4 inline-block">🎬 Lihat Film Sekarang</a>
+    <div class="container mx-auto px-6 py-16">
+        <div class="max-w-6xl mx-auto">
+            
+            <!-- Header -->
+            <div class="mb-10">
+                <h1 class="text-4xl font-bold mb-2">📜 Riwayat Transaksi</h1>
+                <p class="text-gray-400">Lihat semua transaksi pembelian tiket Anda</p>
             </div>
-        @else
-            <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden">
-                <thead class="bg-gray-100">
-                    <tr>
-                        <th class="text-left px-4 py-3 border-b">Kode Transaksi</th>
-                        <th class="text-left px-4 py-3 border-b">Kode Booking</th>
-                        <th class="text-left px-4 py-3 border-b">Total</th>
-                        <th class="text-left px-4 py-3 border-b">Status</th>
-                        <th class="text-left px-4 py-3 border-b">Tanggal</th>
-                        <th class="text-center px-4 py-3 border-b">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($transactions as $trx)
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 border-b font-semibold">{{ $trx->transaction_code }}</td>
-                            <td class="px-4 py-3 border-b">{{ $trx->booking_code }}</td>
-                            <td class="px-4 py-3 border-b">Rp {{ number_format($trx->total_amount, 0, ',', '.') }}</td>
-                            <td class="px-4 py-3 border-b">
-                                <span class="font-semibold 
-                                    {{ $trx->status == 'paid' ? 'text-green-600' : 
-                                       ($trx->status == 'pending' ? 'text-yellow-600' : 'text-red-600') }}">
-                                    {{ ucfirst($trx->status) }}
-                                </span>
-                            </td>
-                            <td class="px-4 py-3 border-b">{{ $trx->created_at->format('d M Y H:i') }}</td>
-                            <td class="px-4 py-3 border-b text-center">
-                                <a href="{{ route('transaction.show', $trx->transaction_code) }}"
-                                   class="text-blue-600 hover:underline font-semibold">
-                                    🔍 Lihat
-                                </a>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        @endif
 
-        <div class="text-center mt-8">
-            <a href="/" class="text-blue-600 hover:underline">← Kembali ke Beranda</a>
+            @if($transactions->isEmpty())
+                <!-- Empty State -->
+                <div class="bg-[#2A2A2A] rounded-2xl p-16 text-center shadow-xl">
+                    <div class="inline-block bg-gray-800 rounded-full p-8 mb-6">
+                        <svg class="w-24 h-24 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-2">Belum Ada Transaksi</h3>
+                    <p class="text-gray-400 mb-8">Anda belum melakukan pembelian tiket</p>
+                    <a href="{{ route('home') }}" 
+                       class="inline-block bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 
+                       px-8 py-3 rounded-full font-bold transition-all duration-200 hover:scale-105">
+                        🎬 Pilih Film Sekarang
+                    </a>
+                </div>
+            @else
+                <!-- Transaction List -->
+                <div class="space-y-6">
+                    @foreach($transactions as $transaction)
+                    <div class="bg-[#2A2A2A] rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
+                        <div class="p-6">
+                            <!-- Transaction Header -->
+                            <div class="flex items-center justify-between mb-4 pb-4 border-b border-gray-700">
+                                <div>
+                                    <p class="text-sm text-gray-400 mb-1">Kode Transaksi</p>
+                                    <p class="text-xl font-bold text-blue-400">{{ $transaction->transaction_code }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-400 mb-1">Tanggal</p>
+                                    <p class="font-semibold">{{ $transaction->created_at->format('d M Y, H:i') }}</p>
+                                </div>
+                            </div>
+
+                            <!-- Transaction Info -->
+                            <div class="flex gap-6 mb-4">
+                                @if($transaction->film)
+                                <img src="{{ asset($transaction->film->poster ?? 'images/default.jpg') }}" 
+                                     alt="{{ $transaction->film->title }}" 
+                                     class="w-24 h-36 object-cover rounded-lg shadow-lg">
+                                @endif
+                                <div class="flex-1">
+                                    <h3 class="text-2xl font-bold mb-2">{{ $transaction->film->title ?? 'Film' }}</h3>
+                                    <div class="space-y-2 text-sm">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-400">👤</span>
+                                            <span>{{ $transaction->customer_name ?? $transaction->user->name }}</span>
+                                        </div>
+                                        @if($transaction->showtime)
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-400">🕐</span>
+                                            <span>{{ $transaction->showtime }}</span>
+                                        </div>
+                                        @endif
+                                        @if($transaction->seats)
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-400">🪑</span>
+                                            <span>Kursi: {{ is_array($transaction->seats) ? implode(', ', $transaction->seats) : $transaction->seats }}</span>
+                                        </div>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Transaction Footer -->
+                            <div class="flex items-center justify-between pt-4 border-t border-gray-700">
+                                <div>
+                                    <p class="text-sm text-gray-400 mb-1">Total Pembayaran</p>
+                                    <p class="text-2xl font-bold text-red-500">
+                                        Rp {{ number_format($transaction->total_amount, 0, ',', '.') }}
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <!-- Status Badge -->
+                                    @if($transaction->status === 'paid')
+                                        <span class="px-4 py-2 bg-green-600 text-white rounded-full text-sm font-bold">
+                                            ✓ Lunas
+                                        </span>
+                                    @elseif($transaction->status === 'pending')
+                                        <span class="px-4 py-2 bg-yellow-600 text-white rounded-full text-sm font-bold">
+                                            ⏳ Pending
+                                        </span>
+                                    @else
+                                        <span class="px-4 py-2 bg-red-700 text-white rounded-full text-sm font-bold">
+                                            ✗ {{ ucfirst($transaction->status) }}
+                                        </span>
+                                    @endif
+
+                                    <!-- Action Button -->
+                                    <a href="{{ route('transaction.show', $transaction->transaction_code) }}" 
+                                       class="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 
+                                       px-6 py-2 rounded-full font-bold transition-all duration-200 hover:scale-105">
+                                        Detail →
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+
+                <!-- Pagination (jika ada) -->
+                @if(method_exists($transactions, 'links'))
+                <div class="mt-8">
+                    {{ $transactions->links() }}
+                </div>
+                @endif
+            @endif
         </div>
     </div>
+
+    @include('layouts.footer')
 
 </body>
 </html>

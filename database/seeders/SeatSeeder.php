@@ -9,6 +9,10 @@ class SeatSeeder extends Seeder
 {
     public function run(): void
     {
+        // Hapus dulu agar tidak double
+        Seat::truncate();
+
+        // Generate seat otomatis
         Seat::generateSeats();
     }
 }

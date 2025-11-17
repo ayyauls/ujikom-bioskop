@@ -9,62 +9,33 @@ class Film extends Model
 {
     use HasFactory;
 
-    protected $table = 'films';
-    
     protected $fillable = [
         'title',
-        'genre',
-        'poster',
-        'duration',
-        'rating',
         'description',
-        'status'
+        'genre',
+        'duration',
+        'director',
+        'cast',
+        'release_date',
+        'poster',
+        'trailer_url',
+        'rating',
+        'age_rating',
+        'status',
+        'studio_id',
+        'showtimes'
     ];
 
-    /**
-     * The attributes that should be cast.
-     */
     protected $casts = [
-        'duration' => 'integer',
+        'release_date' => 'datetime',
+        'showtimes' => 'array',
     ];
 
     /**
-     * Relasi ke Bookings
+     * Relasi ke Studio
      */
-    public function bookings()
+    public function studio()
     {
-        return $this->hasMany(Booking::class);
-    }
-
-    /**
-     * Scope untuk film yang sedang tayang
-     */
-    public function scopeNowPlaying($query)
-    {
-        return $query->where('status', 'now_playing');
-    }
-
-    /**
-     * Scope untuk film yang akan datang
-     */
-    public function scopeComingSoon($query)
-    {
-        return $query->where('status', 'coming_soon');
-    }
-
-    /**
-     * Get formatted duration
-     */
-    public function getFormattedDurationAttribute()
-    {
-        if (!$this->duration) return '-';
-        
-        $hours = floor($this->duration / 60);
-        $minutes = $this->duration % 60;
-        
-        if ($hours > 0) {
-            return $hours . 'h ' . $minutes . 'm';
-        }
-        return $minutes . 'm';
+        return $this->belongsTo(Studio::class);
     }
 }

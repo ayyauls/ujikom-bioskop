@@ -15,14 +15,12 @@
         <div class="bg-[#2A2A2A] p-10 rounded-2xl shadow-2xl shadow-red-900/25 w-full max-w-lg transition-transform hover:scale-[1.01]">
             <h2 class="text-4xl font-extrabold text-center mb-8">Login ke Akunmu</h2>
 
-            <!-- Alert sukses -->
             @if (session('success'))
                 <div class="mb-4 p-4 rounded-lg bg-green-600 text-white text-base text-center shadow-md shadow-green-900/30">
                     {{ session('success') }}
                 </div>
             @endif
 
-            <!-- Alert error -->
             @if ($errors->any())
                 <div class="mb-4 p-4 rounded-lg bg-red-600 text-white text-base shadow-md shadow-red-900/30">
                     <ul class="list-disc pl-5 space-y-1">

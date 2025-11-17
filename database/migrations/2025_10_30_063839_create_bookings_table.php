@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('customer_email');
             $table->string('customer_phone', 20);
             $table->decimal('price', 10, 2)->default(50000);
-            $table->enum('status', ['pending', 'paid', 'failed', 'cancelled'])->default('pending');
+            $table->enum('status', ['pending', 'paid', 'failed', 'cancelled', 'expired'])->default('pending');
             $table->string('payment_type', 50)->nullable();
             $table->timestamp('transaction_time')->nullable();
             $table->timestamps();

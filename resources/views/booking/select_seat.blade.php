@@ -70,8 +70,8 @@
                     <div class="mt-6 pt-6 border-t border-gray-700">
                         <p class="text-gray-400 text-sm mb-2">📅 Jadwal Dipilih</p>
                         <div class="bg-red-600 px-6 py-3 rounded-lg text-center">
-                            <p class="text-2xl font-bold">{{ $showtime }}</p>
-                            <p class="text-xs mt-1">{{ now()->format('d M Y') }}</p>
+                            <p class="text-2xl font-bold">{{ $schedule->show_time->format('H:i') }}</p>
+                            <p class="text-xs mt-1">{{ $schedule->show_date->format('d M Y') }}</p>
                         </div>
                     </div>
 
@@ -108,6 +108,7 @@
                                 @php
                                     $seatNumber = $row . $i;
                                     $isBooked = in_array($seatNumber, $bookedSeats);
+                                    $isDisabled = in_array($seatNumber, $disabledSeats);
                                 @endphp
                                 
                                 @if($i == 7)
@@ -118,11 +119,11 @@
                                     onclick="toggleSeat('{{ $seatNumber }}')" 
                                     data-seat="{{ $seatNumber }}"
                                     title="{{ $seatNumber }}"
-                                    class="seat-btn {{ $isBooked ? 'booked bg-red-600 cursor-not-allowed' : 'available bg-green-600 hover:bg-green-500' }} 
+                                    class="seat-btn {{ $isBooked ? 'booked bg-red-600 cursor-not-allowed' : ($isDisabled ? 'disabled bg-gray-600 cursor-not-allowed' : 'available bg-green-600 hover:bg-green-500') }} 
                                            w-10 h-10 rounded-lg transition-all duration-200 text-xs font-bold
                                            flex items-center justify-center
-                                           {{ !$isBooked ? 'hover:scale-110 hover:shadow-lg' : '' }}"
-                                    {{ $isBooked ? 'disabled' : '' }}>
+                                           {{ !$isBooked && !$isDisabled ? 'hover:scale-110 hover:shadow-lg' : '' }}"
+                                    {{ $isBooked || $isDisabled ? 'disabled' : '' }}>
                                     {{ $i }}
                                 </button>
                             @endfor
@@ -145,6 +146,10 @@
                             <div class="w-7 h-7 rounded bg-red-600 text-xs flex items-center justify-center font-bold">3</div>
                             <span class="text-sm font-medium">Terisi</span>
                         </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded bg-gray-600 text-xs flex items-center justify-center font-bold">4</div>
+                            <span class="text-sm font-medium">Tidak Tersedia</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -166,8 +171,8 @@
                     <div class="mb-4">
                         <p class="text-gray-400 text-sm mb-2">🕐 Jam Tayang</p>
                         <div class="bg-[#1E1E1E] rounded-lg p-4">
-                            <p class="text-lg font-bold">{{ $showtime }}</p>
-                            <p class="text-xs text-gray-400 mt-1">{{ now()->format('d M Y') }}</p>
+                            <p class="text-lg font-bold">{{ $schedule->show_time->format('H:i') }}</p>
+                            <p class="text-xs text-gray-400 mt-1">{{ $schedule->show_date->format('d M Y') }}</p>
                         </div>
                     </div>
 
@@ -195,13 +200,13 @@
                         </div>
                     </div>
 
-<!-- Book Button -->
-<button onclick="submitBooking()" 
-    class="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 
-    py-4 rounded-lg text-lg font-bold shadow-lg transition-all duration-200 hover:scale-105">
-    🎟️ Booking Sekarang
-</button>
-                </div>
+                    <!-- Book Button -->
+                    <button onclick="submitBooking()" 
+                        class="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 
+                        py-4 rounded-lg text-lg font-bold shadow-lg transition-all duration-200 hover:scale-105">
+                        🎟️ Pesan Sekarang
+                    </button>
+                </div>a
             </div>
 
         </div>
@@ -209,93 +214,94 @@
 
     @include('layouts.footer')
 
-<script>
-    let selectedSeats = [];
-    const selectedShowtime = '{{ $showtime }}';
-    const pricePerSeat = 50000;
-
-    function toggleSeat(seatNumber) {
-        const button = event.target;
-        if (button.classList.contains('booked')) return;
-
-        if (selectedSeats.includes(seatNumber)) {
-            selectedSeats = selectedSeats.filter(s => s !== seatNumber);
-            button.classList.remove('bg-blue-600');
-            button.classList.add('bg-green-600');
-        } else {
-            selectedSeats.push(seatNumber);
-            button.classList.remove('bg-green-600');
-            button.classList.add('bg-blue-600');
-        }
-        updateSummary();
-    }
-
-    function updateSummary() {
-        const display = document.getElementById('selectedSeatsDisplay');
-        const total = document.getElementById('totalPrice');
-        const ticketCount = document.getElementById('ticketCount');
+    <script>
+        let selectedSeats = [];
+        const selectedShowtime = '{{ $schedule->show_time->format("H:i") }}';
+        const scheduleId = '{{ $schedule->id }}';
+        const pricePerSeat = 50000;
         
-        if (selectedSeats.length === 0) {
-            display.textContent = '-';
-            display.classList.remove('text-blue-400');
-            display.classList.add('text-gray-500');
-            total.textContent = 'Rp 0';
-            ticketCount.textContent = '0 Tiket';
-        } else {
-            const sortedSeats = selectedSeats.sort((a, b) => {
-                const rowA = a[0], rowB = b[0];
-                const numA = parseInt(a.substring(1)), numB = parseInt(b.substring(1));
-                if (rowA !== rowB) return rowA.localeCompare(rowB);
-                return numA - numB;
+        function toggleSeat(seatNumber) {
+            const button = event.target;
+            if (button.classList.contains('booked') || button.classList.contains('disabled')) return;
+
+            if (selectedSeats.includes(seatNumber)) {
+                selectedSeats = selectedSeats.filter(s => s !== seatNumber);
+                button.classList.remove('bg-blue-600');
+                button.classList.add('bg-green-600');
+            } else {
+                selectedSeats.push(seatNumber);
+                button.classList.remove('bg-green-600');
+                button.classList.add('bg-blue-600');
+            }
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const display = document.getElementById('selectedSeatsDisplay');
+            const total = document.getElementById('totalPrice');
+            const ticketCount = document.getElementById('ticketCount');
+            
+            if (selectedSeats.length === 0) {
+                display.textContent = '-';
+                display.classList.remove('text-blue-400');
+                display.classList.add('text-gray-500');
+                total.textContent = 'Rp 0';
+                ticketCount.textContent = '0 Tiket';
+            } else {
+                const sortedSeats = selectedSeats.sort((a, b) => {
+                    const rowA = a[0], rowB = b[0];
+                    const numA = parseInt(a.substring(1)), numB = parseInt(b.substring(1));
+                    if (rowA !== rowB) return rowA.localeCompare(rowB);
+                    return numA - numB;
+                });
+                
+                display.textContent = sortedSeats.join(', ');
+                display.classList.add('text-blue-400');
+                display.classList.remove('text-gray-500');
+                
+                const totalPrice = selectedSeats.length * pricePerSeat;
+                total.textContent = 'Rp ' + totalPrice.toLocaleString('id-ID');
+                ticketCount.textContent = selectedSeats.length + ' Tiket';
+            }
+        }
+
+        function submitBooking() {
+            const errorAlert = document.getElementById('errorAlert');
+            if (selectedSeats.length === 0) {
+                errorAlert.textContent = '⚠️ Silakan pilih kursi terlebih dahulu!';
+                errorAlert.classList.remove('hidden');
+                setTimeout(() => errorAlert.classList.add('hidden'), 3000);
+                return;
+            }
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ route("booking.book", $film->id) }}';
+
+            const csrf = document.createElement('input');
+            csrf.type = 'hidden';
+            csrf.name = '_token';
+            csrf.value = '{{ csrf_token() }}';
+            form.appendChild(csrf);
+
+            selectedSeats.forEach(seat => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'seats[]';
+                input.value = seat;
+                form.appendChild(input);
             });
-            
-            display.textContent = sortedSeats.join(', ');
-            display.classList.add('text-blue-400');
-            display.classList.remove('text-gray-500');
-            
-            const totalPrice = selectedSeats.length * pricePerSeat;
-            total.textContent = 'Rp ' + totalPrice.toLocaleString('id-ID');
-            ticketCount.textContent = selectedSeats.length + ' Tiket';
+
+            const scheduleInput = document.createElement('input');
+            scheduleInput.type = 'hidden';
+            scheduleInput.name = 'schedule_id';
+            scheduleInput.value = scheduleId;
+            form.appendChild(scheduleInput);
+
+            document.body.appendChild(form);
+            form.submit();
         }
-    }
-
-    function submitBooking() {
-        const errorAlert = document.getElementById('errorAlert');
-        if (selectedSeats.length === 0) {
-            errorAlert.textContent = '⚠️ Silakan pilih kursi terlebih dahulu!';
-            errorAlert.classList.remove('hidden');
-            setTimeout(() => errorAlert.classList.add('hidden'), 3000);
-            return;
-        }
-
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '{{ route("booking.book", $film->id) }}'; // ✅ sudah disesuaikan!
-
-        const csrf = document.createElement('input');
-        csrf.type = 'hidden';
-        csrf.name = '_token';
-        csrf.value = '{{ csrf_token() }}';
-        form.appendChild(csrf);
-
-        selectedSeats.forEach(seat => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'seats[]';
-            input.value = seat;
-            form.appendChild(input);
-        });
-
-        const showtimeInput = document.createElement('input');
-        showtimeInput.type = 'hidden';
-        showtimeInput.name = 'showtime';
-        showtimeInput.value = selectedShowtime;
-        form.appendChild(showtimeInput);
-
-        document.body.appendChild(form);
-        form.submit();
-    }
-</script>
+    </script>
 
 </body>
 </html>

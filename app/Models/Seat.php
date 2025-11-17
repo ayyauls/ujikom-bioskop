@@ -16,6 +16,7 @@ class Seat extends Model
         'type',
         'price',
         'is_available',
+        'studio_id',
     ];
 
     protected $casts = [
@@ -55,33 +56,37 @@ class Seat extends Model
     {
         $rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
         $seatsPerRow = 12;
+        $studios = \App\Models\Studio::all();
 
-        foreach ($rows as $row) {
-            for ($i = 1; $i <= $seatsPerRow; $i++) {
-                // Tentukan tipe kursi
-                $type = 'regular';
-                $price = 50000;
+        foreach ($studios as $studio) {
+            foreach ($rows as $row) {
+                for ($i = 1; $i <= $seatsPerRow; $i++) {
+                    // Tentukan tipe kursi
+                    $type = 'regular';
+                    $price = 50000;
 
-                // Baris belakang (H, I, J) = Premium
-                if (in_array($row, ['H', 'I', 'J'])) {
-                    $type = 'premium';
-                    $price = 75000;
+                    // Baris belakang (H, I, J) = Premium
+                    if (in_array($row, ['H', 'I', 'J'])) {
+                        $type = 'premium';
+                        $price = 75000;
+                    }
+
+                    // Kursi tengah (5, 6, 7, 8) di baris premium = VIP
+                    if (in_array($row, ['H', 'I', 'J']) && in_array($i, [5, 6, 7, 8])) {
+                        $type = 'vip';
+                        $price = 100000;
+                    }
+
+                    self::create([
+                        'seat_number' => $row . $i,
+                        'row_letter' => $row,
+                        'seat_position' => $i,
+                        'type' => $type,
+                        'price' => $price,
+                        'is_available' => true,
+                        'studio_id' => $studio->id,
+                    ]);
                 }
-
-                // Kursi tengah (5, 6, 7, 8) di baris premium = VIP
-                if (in_array($row, ['H', 'I', 'J']) && in_array($i, [5, 6, 7, 8])) {
-                    $type = 'vip';
-                    $price = 100000;
-                }
-
-                self::create([
-                    'seat_number' => $row . $i,
-                    'row_letter' => $row,
-                    'seat_position' => $i,
-                    'type' => $type,
-                    'price' => $price,
-                    'is_available' => true,
-                ]);
             }
         }
     }

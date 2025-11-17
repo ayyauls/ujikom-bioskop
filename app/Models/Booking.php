@@ -4,16 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;
 
 class Booking extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'booking_code',
         'user_id',
         'film_id',
+        'schedule_id',
+        'booking_code',
         'seat_number',
         'showtime',
         'booking_date',
@@ -26,22 +26,10 @@ class Booking extends Model
         'transaction_time',
     ];
 
-    /**
-     * The attributes that should be cast.
-     */
     protected $casts = [
         'booking_date' => 'date',
-        'transaction_time' => 'datetime',
         'price' => 'decimal:2',
     ];
-
-    /**
-     * Relasi ke Film
-     */
-    public function film(): BelongsTo
-    {
-        return $this->belongsTo(Film::class);
-    }
 
     /**
      * Relasi ke User
@@ -52,94 +40,58 @@ class Booking extends Model
     }
 
     /**
-     * Scope untuk filter booking berdasarkan film, tanggal, dan showtime
+     * Relasi ke Film
      */
-    public function scopeForFilmShowtime($query, $filmId, $date, $showtime)
+    public function film()
     {
-        return $query->where('film_id', $filmId)
-                     ->where('booking_date', $date)
-                     ->where('showtime', $showtime)
-                     ->whereIn('status', ['pending', 'paid']);
+        return $this->belongsTo(Film::class);
     }
 
     /**
-     * Scope untuk booking aktif (belum expired)
+     * Relasi ke Schedule
      */
-    public function scopeActive($query)
+    public function schedule()
     {
-        return $query->whereIn('status', ['pending', 'paid'])
-                     ->where('booking_date', '>=', now()->format('Y-m-d'));
+        return $this->belongsTo(Schedule::class);
     }
 
     /**
-     * Generate booking code unik
+     * Relasi ke Transaction via booking_code
      */
-    public static function generateBookingCode()
+    public function transaction()
     {
-        $date = date('Ymd');
-        $lastBooking = self::where('booking_code', 'LIKE', "BK{$date}%")
-            ->orderBy('booking_code', 'DESC')
-            ->first();
-
-        if ($lastBooking) {
-            $lastNumber = intval(substr($lastBooking->booking_code, -5));
-            $newNumber = $lastNumber + 1;
-        } else {
-            $newNumber = 1;
-        }
-
-        return 'BK' . $date . str_pad($newNumber, 5, '0', STR_PAD_LEFT);
+        return $this->hasOne(Transaction::class, 'booking_code', 'booking_code');
     }
 
     /**
-     * Get formatted date (Accessor)
+     * Scope untuk booking hari ini
      */
-    public function getFormattedDateAttribute()
+    public function scopeToday($query)
     {
-        return Carbon::parse($this->booking_date)->format('d M Y');
+        return $query->whereDate('booking_date', today());
     }
 
     /**
-     * Get formatted price (Accessor)
+     * Scope untuk booking paid
      */
-    public function getFormattedPriceAttribute()
+    public function scopePaid($query)
     {
-        return 'Rp ' . number_format($this->price, 0, ',', '.');
+        return $query->where('status', 'paid');
     }
 
     /**
-     * Get formatted showtime (Accessor)
+     * Scope untuk booking pending
      */
-    public function getFormattedShowtimeAttribute()
+    public function scopePending($query)
     {
-        return Carbon::parse($this->showtime)->format('H:i');
+        return $query->where('status', 'pending');
     }
 
     /**
-     * Get status badge (Accessor)
+     * Get formatted seat
      */
-    public function getStatusBadgeAttribute()
+    public function getFormattedSeatAttribute()
     {
-        $badges = [
-            'pending' => '<span class="bg-yellow-600 px-3 py-1 rounded-full text-xs font-bold">⏳ Pending</span>',
-            'paid' => '<span class="bg-green-600 px-3 py-1 rounded-full text-xs font-bold">✓ Paid</span>',
-            'failed' => '<span class="bg-red-600 px-3 py-1 rounded-full text-xs font-bold">✗ Failed</span>',
-            'cancelled' => '<span class="bg-gray-600 px-3 py-1 rounded-full text-xs font-bold">✗ Cancelled</span>',
-        ];
-
-        return $badges[$this->status] ?? $this->status;
-    }
-
-    /**
-     * Check if seat is available
-     */
-    public static function isSeatAvailable($filmId, $seatNumber, $date, $showtime)
-    {
-        return !self::where('film_id', $filmId)
-            ->where('seat_number', $seatNumber)
-            ->where('booking_date', $date)
-            ->where('showtime', $showtime)
-            ->whereIn('status', ['pending', 'paid'])
-            ->exists();
+        return $this->seat_number;
     }
 }

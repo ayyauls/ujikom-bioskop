@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('booking_code'); // Link ke booking_code di bookings table
             $table->foreignId('user_id')->nullable()->constrained()->onDelete('set null');
             $table->integer('total_amount'); // Total pembayaran
+            $table->foreignId('film_id')->constrained('films')->onDelete('cascade'); // ← PASTIKAN ADA
             $table->enum('status', ['pending', 'paid', 'expired', 'failed', 'cancelled'])->default('pending');
             $table->string('payment_method')->nullable(); // gopay, bca_va, etc
             $table->string('snap_token')->nullable(); // Midtrans snap token

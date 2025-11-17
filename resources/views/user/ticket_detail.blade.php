@@ -3,128 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detail Tiket - BioskopKu</title>
+    <title>Detail Transaksi - BioskopKu</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#1E1E1E] text-white font-sans min-h-screen">
 
     @include('layouts.navbar')
 
-    <div class="container mx-auto px-6 py-10">
-        <div class="max-w-3xl mx-auto">
+    <div class="container mx-auto px-6 py-16">
+        <div class="max-w-4xl mx-auto">
             
             <!-- Back Button -->
-            <a href="{{ route('my.tickets') }}" class="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors duration-200">
+            <a href="{{ route('transaction.index') }}" 
+               class="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
-                Kembali ke Tiket Saya
+                Kembali
             </a>
 
-            <!-- Ticket Card -->
-            <div class="bg-[#2A2A2A] rounded-2xl overflow-hidden shadow-2xl">
-                
-                <!-- Header dengan Booking Code -->
-                <div class="bg-gradient-to-r from-red-600 to-red-700 p-6 text-center">
-                    <p class="text-sm text-gray-200 mb-2">Kode Booking</p>
-                    <p class="text-4xl font-bold tracking-wider">{{ $booking_code }}</p>
-                    <p class="text-xs text-gray-200 mt-2">Tunjukkan kode ini di loket</p>
+            <!-- Header -->
+            <div class="text-center mb-10">
+                <div class="inline-block bg-gradient-to-r from-red-600 to-red-500 rounded-full p-6 mb-4">
+                    <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-4xl font-bold mb-2">📋 Detail Transaksi</h1>
+                <p class="text-gray-400">{{ $transaction->transaction_code }}</p>
+            </div>
+
+            <!-- Status Card -->
+            <div class="bg-gradient-to-r from-red-600 to-red-700 rounded-2xl p-6 mb-8 text-center shadow-xl">
+                <p class="text-sm text-gray-200 mb-2">Status Pembayaran</p>
+                @if($transaction->status === 'paid')
+                    <p class="text-4xl font-bold tracking-wider mb-2">✓ LUNAS</p>
+                    <p class="text-xs text-gray-200">Pembayaran berhasil pada {{ $transaction->paid_at?->format('d M Y, H:i') ?? '-' }}</p>
+                @elseif($transaction->status === 'pending')
+                    <p class="text-4xl font-bold tracking-wider mb-2">⏳ PENDING</p>
+                    <p class="text-xs text-gray-200">Menunggu pembayaran</p>
+                @else
+                    <p class="text-4xl font-bold tracking-wider mb-2">{{ strtoupper($transaction->status) }}</p>
+                @endif
+            </div>
+
+            <!-- Film Info -->
+            @if($film)
+            <div class="bg-[#2A2A2A] rounded-2xl p-8 mb-8 shadow-xl">
+                <div class="flex gap-6 mb-6 pb-6 border-b border-gray-700">
+                    <img src="{{ asset($film->poster) }}" alt="{{ $film->title }}" 
+                         class="w-32 h-48 object-cover rounded-lg shadow-lg">
+                    <div class="flex-1">
+                        <h2 class="text-2xl font-bold mb-4">{{ $film->title }}</h2>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-400">🎭 Genre:</span>
+                                <span class="font-semibold">{{ $film->genre }}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-400">⏱️ Durasi:</span>
+                                <span class="font-semibold">{{ $film->duration }} menit</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-400">🔞 Rating:</span>
+                                <span class="font-semibold">{{ $film->rating }}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Content -->
-                <div class="p-8">
-                    <!-- Film Info -->
-                    <div class="flex gap-6 mb-6 pb-6 border-b border-gray-700">
-                        @if($booking->film && $booking->film->poster)
-                        <img src="{{ asset($booking->film->poster) }}" alt="{{ $booking->film->title }}" 
-                             class="w-32 h-48 object-cover rounded-lg shadow-lg">
-                        @endif
-                        <div class="flex-1">
-                            <h2 class="text-3xl font-bold mb-2">{{ $booking->film->title ?? 'Film Title' }}</h2>
-                            <div class="space-y-2 text-sm">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-gray-400">🎭 Genre:</span>
-                                    <span>{{ $booking->film->genre ?? '-' }}</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-gray-400">⏱️ Durasi:</span>
-                                    <span>{{ $booking->film->duration ?? '-' }} menit</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-gray-400">⭐ Rating:</span>
-                                    <span>{{ $booking->film->rating ?? '-' }}</span>
-                                </div>
-                            </div>
-                        </div>
+                <!-- Booking Details -->
+                <div class="space-y-4">
+                    @if($bookings && $bookings->isNotEmpty())
+                    <div>
+                        <p class="text-gray-400 text-sm mb-1">📅 Tanggal & Waktu</p>
+                        <p class="text-xl font-bold">
+                            {{ \Carbon\Carbon::parse($bookings->first()->booking_date)->format('d M Y') }} 
+                            - {{ $bookings->first()->showtime }}
+                        </p>
                     </div>
-
-                    <!-- Booking Details -->
-                    <div class="space-y-4 mb-6">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <p class="text-gray-400 text-sm mb-1">📅 Tanggal Tayang</p>
-                                <p class="text-xl font-semibold">{{ \Carbon\Carbon::parse($booking->booking_date)->format('d M Y') }}</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-400 text-sm mb-1">🕐 Jam Tayang</p>
-                                <p class="text-xl font-semibold">{{ $booking->showtime }}</p>
-                            </div>
-                        </div>
-
-                        <div>
-                            <p class="text-gray-400 text-sm mb-1">👤 Nama Pemesan</p>
-                            <p class="text-lg font-semibold">{{ $booking->customer_name }}</p>
-                        </div>
-
-                        <div>
-                            <p class="text-gray-400 text-sm mb-1">🪑 Kursi</p>
-                            <p class="text-2xl font-bold text-blue-400">{{ implode(', ', $seats) }}</p>
-                        </div>
-
-                        <div>
-                            <p class="text-gray-400 text-sm mb-1">🎫 Jumlah Tiket</p>
-                            <p class="text-lg font-semibold">{{ count($seats) }} Tiket</p>
-                        </div>
-                    </div>
-
-                    <!-- Total -->
-                    <div class="pt-6 border-t border-gray-700">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <p class="text-gray-400 text-sm mb-1">💰 Total Pembayaran</p>
-                                <p class="text-3xl font-bold text-red-500">Rp {{ number_format($total_price, 0, ',', '.') }}</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-gray-400 text-sm mb-1">Status</p>
-                                <span class="inline-block bg-green-600 px-4 py-2 rounded-lg font-semibold">
-                                    ✓ {{ ucfirst($booking->status) }}
+                    
+                    <div>
+                        <p class="text-gray-400 text-sm mb-1">🪑 Kursi yang Dipesan</p>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            @foreach($bookings as $booking)
+                                <span class="bg-red-600 px-4 py-2 rounded-full font-bold">
+                                    {{ $booking->seat_number }}
                                 </span>
-                            </div>
+                            @endforeach
                         </div>
                     </div>
-                </div>
+                    
+                    <div>
+                        <p class="text-gray-400 text-sm mb-1">🎫 Jumlah Tiket</p>
+                        <p class="text-xl font-bold">{{ $bookings->count() }} Tiket</p>
+                    </div>
+                    @endif
+                    
+                    <div class="pt-4 border-t border-gray-700">
+                        <p class="text-gray-400 text-sm mb-1">💰 Total Pembayaran</p>
+                        <p class="text-3xl font-bold text-red-500">
+                            Rp {{ number_format($transaction->total_amount, 0, ',', '.') }}
+                        </p>
+                    </div>
 
-                <!-- Footer Info -->
-                <div class="bg-blue-900/30 border-t border-blue-700 p-6">
-                    <h3 class="font-bold mb-2 text-blue-400">ℹ️ Informasi Penting:</h3>
-                    <ul class="text-sm text-gray-300 space-y-2">
-                        <li>• Harap datang 15 menit sebelum jam tayang dimulai</li>
-                        <li>• Tunjukkan <strong>Kode Booking ({{ $booking_code }})</strong> di loket untuk mendapatkan tiket fisik</li>
-                        <li>• Simpan screenshot halaman ini sebagai bukti pemesanan</li>
-                        <li>• Tiket yang sudah dibeli tidak dapat dikembalikan</li>
-                    </ul>
+                    @if($transaction->payment_method)
+                    <div>
+                        <p class="text-gray-400 text-sm mb-1">💳 Metode Pembayaran</p>
+                        <p class="text-lg font-bold capitalize">{{ $transaction->payment_method }}</p>
+                    </div>
+                    @endif
+                </div>
+            </div>
+            @endif
+
+            <!-- Customer Info -->
+            <div class="bg-[#2A2A2A] rounded-2xl p-8 mb-8 shadow-xl">
+                <h3 class="text-xl font-bold mb-4">👤 Informasi Pemesan</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Nama:</span>
+                        <span class="font-semibold">{{ $transaction->customer_name ?? $transaction->user->name }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Email:</span>
+                        <span class="font-semibold">{{ $transaction->customer_email ?? $transaction->user->email }}</span>
+                    </div>
+                    @if($transaction->booking_code)
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Kode Booking:</span>
+                        <span class="font-bold text-blue-400">{{ $transaction->booking_code }}</span>
+                    </div>
+                    @endif
                 </div>
             </div>
 
+            <!-- Info Box -->
+            <div class="bg-blue-900/30 border border-blue-700 rounded-xl p-6 mb-8">
+                <h3 class="font-bold mb-2 text-blue-400">ℹ️ Informasi Penting:</h3>
+                <ul class="text-sm text-gray-300 space-y-2">
+                    <li>• Harap datang 15 menit sebelum jam tayang dimulai</li>
+                    <li>• Tunjukkan <strong>Kode Transaksi ({{ $transaction->transaction_code }})</strong> di loket</li>
+                    <li>• Simpan screenshot halaman ini sebagai bukti pemesanan</li>
+                    <li>• Tiket yang sudah dibeli tidak dapat dikembalikan</li>
+                </ul>
+            </div>
+
             <!-- Action Buttons -->
-            <div class="flex gap-4 mt-6">
+            <div class="flex gap-4 flex-col sm:flex-row">
+                @if($transaction->status === 'pending')
+                <a href="{{ route('transaction.payment', $transaction->booking_code) }}" 
+                   class="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 
+                   py-4 rounded-full text-lg font-bold text-center transition-all duration-200 hover:scale-105">
+                    💳 Bayar Sekarang
+                </a>
+                @endif
+                
                 <button onclick="window.print()" 
-                   class="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-bold transition-all duration-200">
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 py-4 rounded-full text-lg font-bold 
+                   transition-all duration-200 hover:scale-105">
                     🖨️ Cetak Tiket
                 </button>
-                <a href="{{ route('home') }}" 
-                   class="flex-1 bg-red-600 hover:bg-red-700 py-3 rounded-lg font-bold text-center transition-all duration-200">
-                    🏠 Kembali ke Beranda
+                
+                <a href="{{ route('transaction.index') }}" 
+                   class="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 
+                   py-4 rounded-full text-lg font-bold text-center transition-all duration-200 hover:scale-105">
+                    📜 Riwayat Transaksi
                 </a>
             </div>
         </div>
@@ -140,6 +184,10 @@
             body {
                 background: white;
                 color: black;
+            }
+            .bg-\[\#2A2A2A\], .bg-blue-900\/30, .bg-gradient-to-r {
+                background: white !important;
+                border: 1px solid #ddd;
             }
         }
     </style>

@@ -16,11 +16,13 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $fillable = [
-        'name',
-        'email',
-        'phone',
-        'password',
-    ];
+    'name',
+    'email',
+    'phone',
+    'password',
+    'role', // Pastikan ini ada
+    'email_verified_at',
+];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -53,3 +55,5 @@ class User extends Authenticatable
         return $this->hasMany(Booking::class);
     }
 }
+
+

@@ -18,6 +18,8 @@
         </div>
     </section>
 
+
+
     <!-- Now Playing -->
     <section id="now-playing" class="px-10 py-16">
         <div class="flex justify-between items-center mb-10">

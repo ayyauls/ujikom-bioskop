@@ -10,41 +10,48 @@ class Transaction extends Model
     use HasFactory;
 
     protected $fillable = [
+        'transaction_code',
         'booking_code',
         'user_id',
-        'film_id',
-        'transaction_code',
         'customer_name',
         'customer_email',
         'seats',
         'showtime',
         'ticket_count',
+        'total_price',
         'total_amount',
-        'payment_method',
+        'film_id',
         'status',
+        'payment_method',
         'snap_token',
         'paid_at',
         'expired_at',
-        'notes'
+        'notes',
     ];
 
     protected $casts = [
         'paid_at' => 'datetime',
         'expired_at' => 'datetime',
+        'seats' => 'array',
         'total_amount' => 'integer',
+        'total_price' => 'integer',
     ];
+
+    /**
+     * Relasi ke Bookings via booking_code
+     */
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class, 'booking_code', 'booking_code');
+    }
 
     /**
      * Relasi ke User
      */
-    // Di Model Transaction
-public function user()
-{
-    return $this->belongsTo(User::class)->withDefault([
-        'name' => 'Guest User',
-        'email' => 'guest@example.com'
-    ]);
-}
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
     /**
      * Relasi ke Film
@@ -55,19 +62,11 @@ public function user()
     }
 
     /**
-     * Relasi ke Bookings (one to many)
+     * Scope untuk transaksi hari ini
      */
-    public function bookings()
+    public function scopeToday($query)
     {
-        return $this->hasMany(Booking::class, 'booking_code', 'booking_code');
-    }
-
-    /**
-     * Scope untuk transaksi pending
-     */
-    public function scopePending($query)
-    {
-        return $query->where('status', 'pending');
+        return $query->whereDate('created_at', today());
     }
 
     /**
@@ -79,64 +78,65 @@ public function user()
     }
 
     /**
-     * Check if transaction is pending
+     * Scope untuk transaksi pending
      */
-    public function isPending()
+    public function scopePending($query)
     {
-        return $this->status === 'pending';
+        return $query->where('status', 'pending');
     }
 
     /**
-     * Check if transaction is paid
+     * Scope untuk transaksi failed
      */
-    public function isPaid()
+    public function scopeFailed($query)
     {
-        return $this->status === 'paid';
+        return $query->where('status', 'failed');
+    }
+
+    /**
+     * Get formatted price
+     */
+    public function getFormattedPriceAttribute()
+    {
+        return 'Rp ' . number_format($this->total_amount, 0, ',', '.');
+    }
+
+    /**
+     * Check if payment is cash
+     */
+    public function isCash()
+    {
+        return $this->payment_method === 'cash';
+    }
+
+    /**
+     * Check if payment is QRIS
+     */
+    public function isQris()
+    {
+        return $this->payment_method === 'qris';
     }
 
     /**
      * Mark transaction as paid
      */
-    public function markAsPaid($paymentMethod = null)
+    public function markAsPaid()
     {
         $this->update([
             'status' => 'paid',
-            'payment_method' => $paymentMethod,
             'paid_at' => now(),
         ]);
-
-        // Update booking status
-        Booking::where('booking_code', $this->booking_code)->update(['status' => 'confirmed']);
     }
 
     /**
-     * Mark transaction as failed
-     */
-    public function markAsFailed()
-    {
-        $this->update(['status' => 'failed']);
-        Booking::where('booking_code', $this->booking_code)->update(['status' => 'cancelled']);
-    }
-
-    /**
-     * Generate transaction code
+     * Generate unique transaction code
      */
     public static function generateTransactionCode()
     {
         do {
-            $randomNumber = str_pad(mt_rand(1, 999), 3, '0', STR_PAD_LEFT);
-            $code = 'TRX' . date('Ymd') . $randomNumber;
-            $exists = self::where('transaction_code', $code)->exists();
-        } while ($exists);
-        
-        return $code;
-    }
+            $code = 'TRX' . date('Ymd') . rand(10000, 99999);
+        } while (self::where('transaction_code', $code)->exists());
 
-    /**
-     * Get formatted amount
-     */
-    public function getFormattedAmountAttribute()
-    {
-        return 'Rp ' . number_format($this->total_amount, 0, ',', '.');
+        return $code;
     }
 }

@@ -5,126 +5,117 @@ namespace Database\Seeders;
 use App\Models\Film;
 use App\Models\Booking;
 use App\Models\User;
+use App\Models\Studio;
+use App\Models\Seat;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-
     /**
      * Seed the application's database.
      */
     public function run(): void
     {
-        // Nonaktifkan foreign key checks
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        
-        // Hapus data bookings dulu (karena ada foreign key ke films)
-        Booking::truncate();
-        
-        // Baru hapus data films
-        Film::truncate();
-        
-        // Aktifkan kembali foreign key checks
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // Skip foreign key checks for SQLite compatibility
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
 
-        $films = [
+        $this->call([
+        PriceSeeder::class,
+        // ... seeder lainnya
+    ]);
+
+        // Hapus data lama agar tidak duplikat
+        Booking::truncate();
+        Film::truncate();
+        Seat::truncate();
+        Studio::truncate();
+        User::truncate();
+
+        // Skip foreign key checks for SQLite compatibility
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        // === DATA USER & ADMIN ===
+        $users = [
             [
-                'title' => 'Chainsaw Man',
-                'genre' => 'Animation, Fantasy',
-                'poster' => 'images/chainsawman.jpg',
-                'duration' => 100,
-                'rating' => '17+',
-                'description' => 'A dark fantasy anime full of action and emotion.',
-                'status' => 'now_playing',
+                'name' => 'Admin Utama',
+                'email' => 'admin@gmail.com',
+                'phone' => '081234567890',
+                'password' => Hash::make('123123'),
+                'role' => 'admin',
+                'email_verified_at' => now(),
             ],
             [
-                'title' => 'Your Name',
-                'genre' => 'Animation, Romance, Fantasy',
-                'poster' => 'images/yourname.jpg',
-                'duration' => 106,
-                'rating' => '13+',
-                'description' => 'A beautiful story about two teenagers who mysteriously swap bodies.',
-                'status' => 'now_playing',
+                'name' => 'Ayu',
+                'email' => 'ayuu@gmail.com',
+                'phone' => '083869112233',
+                'password' => Hash::make('123123'),
+                'role' => 'user',
+                'email_verified_at' => now(),
             ],
             [
-                'title' => 'Jujutsu Kaisen',
-                'genre' => 'Animation, Action, Supernatural',
-                'poster' => 'images/jujutsukaisen.jpg',
-                'duration' => 120,
-                'rating' => '17+',
-                'description' => 'A thrilling supernatural action anime with incredible fight scenes.',
-                'status' => 'now_playing',
+                'name' => 'Owner Cinema',
+                'email' => 'meimei@gmail.com',
+                'phone' => '0880',
+                'password' => Hash::make('123123'),
+                'role' => 'owner',
+                'email_verified_at' => now(),
             ],
             [
-                'title' => 'Spirited Away',
-                'genre' => 'Animation, Fantasy, Adventure',
-                'poster' => 'images/spiritedaway.jpg',
-                'duration' => 125,
-                'rating' => 'SU',
-                'description' => 'A masterpiece from Studio Ghibli about a girl trapped in a spirit world.',
-                'status' => 'now_playing',
-            ],
-            [
-                'title' => 'One Piece',
-                'genre' => 'Animation, Adventure, Comedy',
-                'poster' => 'images/onepiece.jpg',
-                'duration' => 115,
-                'rating' => '13+',
-                'description' => 'Join Luffy and his crew on an epic adventure to find the One Piece.',
-                'status' => 'now_playing',
-            ],
-            [
-                'title' => 'Demon Slayer: Mugen Train',
-                'genre' => 'Animation, Action, Dark Fantasy',
-                'poster' => 'images/demonslayermt.jpg',
-                'duration' => 117,
-                'rating' => '17+',
-                'description' => 'An emotional journey featuring breathtaking animation and intense battles.',
-                'status' => 'coming_soon',
-            ],
-            [
-                'title' => 'Howl\'s Moving Castle',
-                'genre' => 'Animation, Fantasy, Romance',
-                'poster' => 'images/howlscastle.jpg',
-                'duration' => 119,
-                'rating' => 'SU',
-                'description' => 'A magical tale of love and transformation from Studio Ghibli.',
-                'status' => 'coming_soon',
-            ],
-            [
-                'title' => 'Suzume',
-                'genre' => 'Animation, Adventure, Fantasy',
-                'poster' => 'images/suzume.jpg',
-                'duration' => 122,
-                'rating' => '13+',
-                'description' => 'A coming-of-age story mixed with supernatural elements and adventure.',
-                'status' => 'coming_soon',
-            ],
-            [
-                'title' => 'Weathering With You',
-                'genre' => 'Animation, Romance, Fantasy',
-                'poster' => 'images/weathering.jpg',
-                'duration' => 112,
-                'rating' => '13+',
-                'description' => 'A romantic fantasy about a boy who meets a girl with the power to control weather.',
-                'status' => 'coming_soon',
-            ],
-            [
-                'title' => 'The Garden of Words',
-                'genre' => 'Animation, Drama, Romance',
-                'poster' => 'images/gardenwords.jpg',
-                'duration' => 46,
-                'rating' => '13+',
-                'description' => 'A beautiful short film about an unlikely relationship that develops on rainy days.',
-                'status' => 'coming_soon',
+                'name' => 'Kasir Utama',
+                'email' => 'kasir@gmail.com',
+                'phone' => '081234567893',
+                'password' => Hash::make('123123'),
+                'role' => 'kasir',
+                'email_verified_at' => now(),
             ],
         ];
 
-        foreach ($films as $film) {
-            Film::create($film);
+        foreach ($users as $user) {
+            User::create($user);
         }
 
-        $this->command->info('✅ Films seeded successfully!');
+        // === STUDIO & KURSI PERMANEN ===
+        $studios = [
+            ['name' => 'Studio 1', 'capacity' => 120, 'is_active' => true],
+            ['name' => 'Studio 2', 'capacity' => 120, 'is_active' => true],
+            ['name' => 'Studio 3', 'capacity' => 120, 'is_active' => true],
+            ['name' => 'Studio 4', 'capacity' => 120, 'is_active' => true],
+        ];
+
+        foreach ($studios as $studioData) {
+            $studio = Studio::create($studioData);
+            
+            // Buat kursi untuk setiap studio (A1-J12 = 120 kursi)
+            $rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+            foreach ($rows as $row) {
+                for ($i = 1; $i <= 12; $i++) {
+                    Seat::create([
+                        'studio_id' => $studio->id,
+                        'seat_number' => $row . $i,
+                        'row_letter' => $row,
+                        'seat_position' => $i,
+                        'type' => 'regular',
+                        'price' => 50000,
+                        'is_available' => true
+                    ]);
+                }
+            }
+        }
+
+        // Film akan dibuat manual di admin
+
+        $this->command->info('✅ All data seeded successfully!');
+        $this->command->info('');
+        $this->command->info('👤 Login Accounts:');
+        $this->command->info('   🔑 Admin  : admin@gmail.com / 123123');
+        $this->command->info('   🔑 Owner  : meimei@gmail.com / 123123');
+        $this->command->info('   🔑 Kasir  : kasir@gmail.com / 123123');
+        $this->command->info('   🔑 User   : ayuu@gmail.com / 123123');
     }
 }
